@@ -72,3 +72,11 @@ func (c *Character) TakePot() {
 
 	fmt.Printf("Potion utilisée ! PV actuels :%d/%d\n", c.CurrentHP, c.MaxHP)
 }
+
+func isDead(c *Character) {
+	if c.CurrentHP <= 0 {
+		fmt.Println("Le joueur est mort.")
+		c.CurrentHP = c.MaxHP / 2
+		fmt.Printf("Le joueur est ressuscité avec %d points de vie.\n", c.CurrentHP)
+	}
+}
