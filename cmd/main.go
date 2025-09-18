@@ -11,34 +11,33 @@ import (
 	"github.com/faiface/beep/speaker"
 )
 
+var mixer = &beep.Mixer{} // Mixer global
+
 func main() {
-	// Ouvre le fichier audio
-	f, err := os.Open("../internal/music.mp3")
+	// --- Charger la musique de fond ---
+	f, err := os.Open("../assets/music.mp3")
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer f.Close()
 
-	// Décode le fichier
 	streamer, format, err := mp3.Decode(f)
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer streamer.Close()
+	// Pas de defer streamer.Close(), sinon la musique s'arrête
 
-	// Initialise le haut-parleur
+	// Init speaker une seule fois
 	speaker.Init(format.SampleRate, format.SampleRate.N(time.Second/10))
 
-	// Lance la musique en parallèle
-	go func() {
-		done := make(chan bool)
-		speaker.Play(beep.Seq(streamer, beep.Callback(func() {
-			done <- true
-		})))
-		<-done
-	}()
+	// Ajouter la musique de fond en boucle
+	loop := beep.Loop(-1, streamer) // -1 = infini
+	mixer.Add(loop)
 
-	// 🚀 Le jeu démarre directement
+	// Jouer le mixer
+	speaker.Play(mixer)
+
+	// --- Lancer le jeu ---
 	c := internal.CharacterCreation()
 	internal.Menu(&c)
 }

@@ -22,8 +22,9 @@ func (c *Character) MarchantInterface() {
 	fmt.Println("6. 🐗 Cuir de Sanglier (3💰)")
 	fmt.Println("7. 🪶 Plume de Corbeau (1💰)")
 	fmt.Println("8. 🎒 Augmentation d’inventaire (+10 slots, 30💰)")
-	fmt.Println("9. 🚪 Quitter la boutique")
-	fmt.Println("10. ✨ Sort de soin (20💰)")
+	fmt.Println("9. ✨ Sort de soin (20💰)")
+	fmt.Println("10. 🏵️ Potion de Mana (20💰)")
+	fmt.Println("11. 🚪 Quitter la boutique")
 	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 	fmt.Printf("💰 Vous avez actuellement : %d pokedollars\n", c.Pokedollar)
 	fmt.Print("👉 Choix : ")
@@ -101,7 +102,7 @@ func (c *Character) MarchantInterface() {
 			TypeWriter("💸 Pas assez de pokedollars !", 15*time.Millisecond)
 		}
 
-	case 10:
+	case 9:
 		if c.Pokedollar >= 20 {
 			c.Pokedollar -= 20
 			c.LearnSpell("Soin léger")
@@ -110,7 +111,16 @@ func (c *Character) MarchantInterface() {
 			TypeWriter("💸 Pas assez de pokedollars !", 15*time.Millisecond)
 		}
 
-	case 9:
+	case 10:
+		if c.Pokedollar >= 20 {
+			c.Pokedollar -= 20
+			c.addInventory("Potion de Mana")
+			TypeWriter("✅ Vous avez obtenu : 🏵️ Potion de Mana", 15*time.Millisecond)
+		} else {
+			TypeWriter("💸 Pas assez de pokedollars !", 15*time.Millisecond)
+		}
+
+	case 11:
 		TypeWriter("👋 Merci pour votre visite, aventurier !", 15*time.Millisecond)
 		return
 
@@ -142,5 +152,28 @@ func (c *Character) PoisonPot() {
 			TypeWriter("💀 Vous êtes mort à cause du poison !", 20*time.Millisecond)
 			break
 		}
+	}
+}
+
+// ===== Potion de Mana =====
+func (c *Character) TakeManaPot() {
+	if c.Inventory["Potion de mana"] > 0 {
+		// Consommer la potion
+		c.Inventory["Potion de mana"]--
+		if c.Inventory["Potion de mana"] == 0 {
+			delete(c.Inventory, "Potion de mana")
+		}
+
+		// Rendre du mana
+		restore := 20
+		c.Mana += restore
+		if c.Mana > c.MaxMana {
+			c.Mana = c.MaxMana
+		}
+
+		TypeWriter(fmt.Sprintf("🔮 Potion de mana utilisée ! Vous récupérez %d mana → %d/%d",
+			restore, c.Mana, c.MaxMana), 20*time.Millisecond)
+	} else {
+		TypeWriter("⚠️ Vous n’avez plus de Potion de mana dans votre inventaire.", 20*time.Millisecond)
 	}
 }

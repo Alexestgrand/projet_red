@@ -2,165 +2,292 @@ package internal
 
 import (
 	"fmt"
+	"math"
 	"time"
+
+	"github.com/charmbracelet/bubbles/list"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/gookit/color"
 )
 
-// 🎮 characterTurn : gère le tour du joueur
+var goblinArt = `
+       ,      ,
+      /(.-""-.)\
+      |\  \/  /|
+      | \ / =/ |
+      \(.\_v_/.)/
+       \   |   /
+        \  |  /
+         )     (
+        /       \
+       (         )
+        \       /
+         \__ __/
+          // \\
+         ||   ||
+`
+
+var raykazaArt = `
+                 /^\/^\
+               _|__|  O|
+      \/     /~     \_/ \
+       \____|__________/  \
+              \_______      \
+                      \     \                 \
+                       |     |                  \
+                      /      /                    \
+                     /     /                       \
+                   /      /                         \ \
+                  /     /                            \  \
+                /     /             _----_            \   \
+               /     /           _-~      ~-_         |   |
+              (      (        _-~    _--_    ~-_     _/   |
+               \      ~-____-~    _-~    ~-_    ~-_-~    /
+                 ~-_           _-~          ~-_       _-~
+                    ~--______-~                ~-___-~
+`
+
+//////////////////////////////////////////////////////
+// 📦 Helpers for Bubble Tea menus
+//////////////////////////////////////////////////////
+
+type menuItem struct{ title string }
+
+func (i menuItem) Title() string       { return i.title }
+func (i menuItem) Description() string { return "" }
+func (i menuItem) FilterValue() string { return i.title }
+
+type menuModel struct {
+	list   list.Model
+	choice string
+	quit   bool
+}
+
+func (m menuModel) Init() tea.Cmd { return nil }
+
+func (m menuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "enter":
+			if selected, ok := m.list.SelectedItem().(menuItem); ok {
+				m.choice = selected.title
+				m.quit = true
+				return m, tea.Quit
+			}
+		case "q", "esc":
+			m.quit = true
+			return m, tea.Quit
+		}
+	}
+	var cmd tea.Cmd
+	m.list, cmd = m.list.Update(msg)
+	return m, cmd
+}
+
+func (m menuModel) View() string {
+	return m.list.View()
+}
+
+//////////////////////////////////////////////////////
+// 🎮 Character Turn
+//////////////////////////////////////////////////////
+
 func (c *Character) characterTurn(monster *Monster) {
 	TypeWriter("\n🌟 --- Tour du joueur --- 🌟", 20*time.Millisecond)
-	fmt.Println("1. Attaquer")
-	fmt.Println("2. Inventaire")
-	fmt.Print("👉 Choix : ")
 
-	var choix int
-	fmt.Scanln(&choix)
+	// Build menu
+	items := []list.Item{
+		menuItem{"Attaquer"},
+		menuItem{"Inventaire"},
+	}
+	l := list.New(items, list.NewDefaultDelegate(), 20, 6)
+	l.Title = color.Bold.Sprintf("👉 Choisis une action")
 
-	switch choix {
-	// ==== ATTAQUE / SORTS ====
-	case 1:
-		fmt.Printf("\n💥 Points de Mana : %d/%d\n", c.Mana, c.MaxMana)
-		TypeWriter("=== 📖 Attaques & Sorts disponibles ===", 15*time.Millisecond)
+	m := menuModel{list: l}
+	p := tea.NewProgram(m)
+	finalModel, _ := p.Run()
+	m = finalModel.(menuModel)
 
-		// Liste des sorts connus par le joueur
-		for i, spell := range c.Skills {
-			switch spell {
-			case "Coup de poing":
-				fmt.Printf("%d. %s (Dégâts: 8 | Mana: 0)\n", i+1, spell)
-			case "Boule de feu":
-				fmt.Printf("%d. %s (Dégâts: 18 | Mana: 10)\n", i+1, spell)
-			case "Soin léger":
-				fmt.Printf("%d. %s (+15 PV | Mana: 5)\n", i+1, spell)
-			default:
-				fmt.Printf("%d. %s\n", i+1, spell)
-			}
-		}
-
-		// Choix du sort
-		var spellChoice int
-		fmt.Print("👉 Choix du sort : ")
-		fmt.Scanln(&spellChoice)
-
-		if spellChoice > 0 && spellChoice <= len(c.Skills) {
-			c.CastSpell(c.Skills[spellChoice-1], monster)
-		} else {
-			TypeWriter("⚠️ Choix invalide, votre tour est perdu !", 20*time.Millisecond)
-		}
-
-	// ==== INVENTAIRE ====
-	case 2:
+	switch m.choice {
+	case "Attaquer":
+		c.chooseAttack(monster)
+	case "Inventaire":
 		c.UseItem(monster)
-
 	default:
-		TypeWriter("⚠️ Choix invalide !", 20*time.Millisecond)
+		TypeWriter("⚠️ Choix invalide, votre tour est perdu !", 20*time.Millisecond)
 	}
 }
 
-// ==== Lancement des sorts ====
+//////////////////////////////////////////////////////
+// 🔥 Choose Attack (skills menu)
+//////////////////////////////////////////////////////
+
+func (c *Character) chooseAttack(monster *Monster) {
+	TypeWriter(fmt.Sprintf("\n💥 Mana : %d/%d", c.Mana, c.MaxMana), 10*time.Millisecond)
+
+	// Build skill menu
+	items := []list.Item{}
+	for _, spell := range c.Skills {
+		items = append(items, menuItem{spell})
+	}
+
+	l := list.New(items, list.NewDefaultDelegate(), 30, 8)
+	l.Title = color.Bold.Sprintf("📖 Attaques & Sorts")
+
+	m := menuModel{list: l}
+	p := tea.NewProgram(m)
+	finalModel, _ := p.Run()
+	m = finalModel.(menuModel)
+
+	if m.choice != "" {
+		c.CastSpell(m.choice, monster)
+	} else {
+		TypeWriter("⚠️ Aucun sort sélectionné.", 15*time.Millisecond)
+	}
+}
+
+//////////////////////////////////////////////////////
+// ⚔️ Cast Spell
+//////////////////////////////////////////////////////
+
 func (c *Character) CastSpell(spell string, target *Monster) {
 	switch spell {
 	case "Coup de poing":
-		damage := 8
-		TypeWriter(fmt.Sprintf("👊 %s utilise %s et inflige %d dégâts à %s !",
-			c.Name, spell, damage, target.Name), 20*time.Millisecond)
+		baseDamage := 8
+		damage := baseDamage + int(math.Pow(float64(c.AtkPoints), 1.2))
 		target.CurrentHP -= damage
+		if target.CurrentHP < 0 {
+			target.CurrentHP = 0
+		}
+		c.Mana += 2
+		if c.Mana > c.MaxMana {
+			c.Mana = c.MaxMana
+		}
+		TypeWriter(fmt.Sprintf("👊 %s inflige %d dégâts à %s (+2 mana)", c.Name, damage, target.Name), 15*time.Millisecond)
 
 	case "Boule de feu":
-		manaCost := 10
-		damage := 18
-		if c.Mana < manaCost {
-			TypeWriter("⚠️ Pas assez de mana pour lancer Boule de feu !", 20*time.Millisecond)
+		if c.Mana < 10 {
+			TypeWriter("⚠️ Pas assez de mana !", 15*time.Millisecond)
 			return
 		}
-		c.Mana -= manaCost
-		TypeWriter(fmt.Sprintf("🔥 %s lance %s et inflige %d dégâts à %s !",
-			c.Name, spell, damage, target.Name), 20*time.Millisecond)
+		damage := 18 + int(math.Pow(float64(c.AtkPoints), 1.2))
+		c.Mana -= 10
 		target.CurrentHP -= damage
+		TypeWriter(fmt.Sprintf("🔥 %s lance Boule de feu et inflige %d dégâts à %s !", c.Name, damage, target.Name), 15*time.Millisecond)
 
 	case "Soin léger":
-		manaCost := 5
-		heal := 15
-		if c.Mana < manaCost {
-			TypeWriter("⚠️ Pas assez de mana pour utiliser Soin léger !", 20*time.Millisecond)
+		if c.Mana < 5 {
+			TypeWriter("⚠️ Pas assez de mana !", 15*time.Millisecond)
 			return
 		}
-		c.Mana -= manaCost
+		c.Mana -= 5
+		heal := 15
 		c.CurrentHP += heal
 		if c.CurrentHP > c.MaxHP {
 			c.CurrentHP = c.MaxHP
 		}
-		TypeWriter(fmt.Sprintf("✨ %s utilise %s et regagne %d PV ! ❤️ (%d/%d PV)",
-			c.Name, spell, heal, c.CurrentHP, c.MaxHP), 20*time.Millisecond)
+		TypeWriter(fmt.Sprintf("✨ %s se soigne de %d PV ! (%d/%d PV)", c.Name, heal, c.CurrentHP, c.MaxHP), 15*time.Millisecond)
 
 	default:
-		TypeWriter("⚠️ Sort inconnu.", 20*time.Millisecond)
+		TypeWriter("⚠️ Sort inconnu.", 15*time.Millisecond)
 	}
 
-	// Vérifie les PV de la cible
 	if target.CurrentHP < 0 {
 		target.CurrentHP = 0
 	}
-
-	// Affiche l’état du monstre après l’attaque
-	TypeWriter(fmt.Sprintf("🛡️ %s → PV : %d/%d", target.Name, target.CurrentHP, target.MaxHP), 15*time.Millisecond)
+	TypeWriter(fmt.Sprintf("🛡️ %s → PV : %d/%d", target.Name, target.CurrentHP, target.MaxHP), 10*time.Millisecond)
 }
 
-// 🎮 Combat d'entraînement contre un gobelin
+//////////////////////////////////////////////////////
+// 🎮 Training Fight
+//////////////////////////////////////////////////////
+
+// Dispatch monster attack depending on monster type
+func monsterAttack(c *Character, m *Monster, tour int) {
+	switch m.Name {
+	case "Gobelin d’entraînement":
+		goblinPattern(c, m, tour)
+	case "Raykaza le Dragon Ancien":
+		raykazaPattern(c, m, tour)
+	default:
+		// Basic attack if no special pattern
+		damage := m.AtkPoints
+		c.CurrentHP -= damage
+		if c.CurrentHP < 0 {
+			c.CurrentHP = 0
+		}
+		TypeWriter(fmt.Sprintf("👹 %s attaque %s et inflige %d dégâts !", m.Name, c.Name, damage), 15*time.Millisecond)
+	}
+}
+
 func trainingFight(c *Character) {
-	goblin := InitGoblin()
+	// Choose monster
+	items := []list.Item{
+		menuItem{"Gobelin d’entraînement"},
+		menuItem{"Raykaza le Dragon Ancien"},
+	}
+	l := list.New(items, list.NewDefaultDelegate(), 30, 8)
+	l.Title = color.Bold.Sprintf("⚔️ Choisis ton adversaire")
 
-	TypeWriter("\n⚔️ Début du combat d’entraînement !", 20*time.Millisecond)
-	TypeWriter(fmt.Sprintf("Un %s apparaît avec %d PV.", goblin.Name, goblin.MaxHP), 20*time.Millisecond)
+	m := menuModel{list: l}
+	p := tea.NewProgram(m)
+	finalModel, _ := p.Run()
+	m = finalModel.(menuModel)
 
-	tour := 1
-
-	// Déterminer qui commence
-	playerFirst := c.Initiative >= goblin.Initiative
-	if playerFirst {
-		TypeWriter(fmt.Sprintf("🎲 %s a plus d’initiative et commence le combat !", c.Name), 20*time.Millisecond)
-	} else {
-		TypeWriter(fmt.Sprintf("🎲 %s a plus d’initiative et attaque en premier !", goblin.Name), 20*time.Millisecond)
+	if m.choice == "" {
+		TypeWriter("⚠️ Aucun adversaire choisi.", 15*time.Millisecond)
+		return
 	}
 
-	// Boucle de combat tour par tour
-	for c.CurrentHP > 0 && goblin.CurrentHP > 0 {
-		TypeWriter(fmt.Sprintf("\n===== TOUR %d =====", tour), 15*time.Millisecond)
+	var monster Monster
+	var monsterArt string
+	var expReward int
+	switch m.choice {
+	case "Gobelin d’entraînement":
+		monster = InitGoblin()
+		monsterArt = goblinArt
+		expReward = 30
+	case "Raykaza le Dragon Ancien":
+		monster = InitRaykaza()
+		monsterArt = raykazaArt
+		expReward = 100
+	}
+
+	TypeWriter(fmt.Sprintf("\n⚔️ Début du combat contre %s !", monster.Name), 20*time.Millisecond)
+	fmt.Println(monsterArt)
+
+	tour := 1
+	playerFirst := c.Initiative >= monster.Initiative
+
+	// Combat loop
+	for c.CurrentHP > 0 && monster.CurrentHP > 0 {
+		color.Bold.Printf("\n===== TOUR %d =====\n", tour)
 
 		if playerFirst {
-			// Tour du joueur
-			c.characterTurn(&goblin)
-			if goblin.CurrentHP <= 0 {
-				TypeWriter(fmt.Sprintf("\n✅ %s a vaincu le %s !", c.Name, goblin.Name), 20*time.Millisecond)
-				c.GainExp(30) // XP gagnée
+			c.characterTurn(&monster)
+			if monster.CurrentHP <= 0 {
 				break
 			}
-
-			// Tour du gobelin
-			goblinPattern(c, &goblin, tour)
-			if c.CurrentHP <= 0 {
-				isDead(c)
-				TypeWriter("🏁 Combat terminé, retour au menu principal.", 20*time.Millisecond)
-				return
-			}
+			monsterAttack(c, &monster, tour)
 		} else {
-			// Tour du gobelin
-			goblinPattern(c, &goblin, tour)
+			monsterAttack(c, &monster, tour)
 			if c.CurrentHP <= 0 {
 				isDead(c)
-				TypeWriter("🏁 Combat terminé, retour au menu principal.", 20*time.Millisecond)
 				return
 			}
-
-			// Tour du joueur
-			c.characterTurn(&goblin)
-			if goblin.CurrentHP <= 0 {
-				TypeWriter(fmt.Sprintf("\n✅ %s a vaincu le %s !", c.Name, goblin.Name), 20*time.Millisecond)
-				c.GainExp(30)
-				break
-			}
+			c.characterTurn(&monster)
 		}
-
 		tour++
 	}
 
-	TypeWriter("\n🏁 Fin du combat d’entraînement, retour au menu principal.", 20*time.Millisecond)
+	// End
+	if c.CurrentHP > 0 {
+		TypeWriter(fmt.Sprintf("✅ %s a vaincu %s !", c.Name, monster.Name), 20*time.Millisecond)
+		c.GainExp(expReward)
+		c.Pokedollar += monster.Reward
+		color.Green.Printf("💰 Vous gagnez %d pokedollars ! (Total: %d)\n", monster.Reward, c.Pokedollar)
+	} else {
+		TypeWriter("💀 Vous avez perdu le combat...", 20*time.Millisecond)
+	}
 }

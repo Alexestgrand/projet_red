@@ -6,4 +6,5 @@ type Monster struct {
 	CurrentHP  int
 	AtkPoints  int
 	Initiative int
+	Reward     int
 }
