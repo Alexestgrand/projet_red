@@ -2,6 +2,7 @@ package internal
 
 import (
 	"fmt"
+	"strings"
 	"time"
 	"unicode"
 
@@ -150,6 +151,7 @@ func CharacterCreation() Character {
 		TypeWriter(color.Style{color.FgGreen, color.OpBold}.Sprintf("Quel est le nom du jeune Aventurier ?"), 20*time.Millisecond)
 		fmt.Scanln(&name)
 
+		// Vérification : uniquement des lettres
 		valid := true
 		for _, letter := range name {
 			if !unicode.IsLetter(letter) {
@@ -157,10 +159,16 @@ func CharacterCreation() Character {
 				break
 			}
 		}
-		if valid {
-			break
+
+		if !valid || len(name) == 0 {
+			TypeWriter("⚠️ Que des lettres uniquement !", 15*time.Millisecond)
+			continue
 		}
-		TypeWriter("⚠️ Que des lettres uniquement !", 15*time.Millisecond)
+
+		// Normalisation → 1ère majuscule + reste en minuscule
+		name = strings.ToUpper(string(name[0])) + strings.ToLower(name[1:])
+
+		break
 	}
 
 	// Build Bubble Tea list of classes
